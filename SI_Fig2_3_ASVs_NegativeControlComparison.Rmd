@@ -1,0 +1,139 @@
+---
+title: "SI_Figure 2 & 3 Negative Controls ASV count comparison"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+SFtoHInegComparison <- subset_samples(ps, bonzai_sample_name%in%c("ESP99","ESP100","ESP112","ESP113","ESP114","ESP187"))
+
+#Remove Bacteria and Archaea sequences and all unknown, unassigned, no hit
+SFtoHInegComparison_pruneBac <- taxa_prune(SFtoHInegComparison,'tax=k__Bacteria','Kingdom')
+SFtoHInegComparison_pruneProk <- taxa_prune(SFtoHInegComparison_pruneBac,'tax=k__Archaea','Kingdom')
+SFtoHInegComparison_pruneProkUnk <- taxa_prune (SFtoHInegComparison_pruneProk,'tax=k__unassigned','Kingdom')
+SFtoHInegComparison_pruneProkUnk <- taxa_prune (SFtoHInegComparison_pruneProkUnk,'tax=k__unknown','Kingdom')
+SFtoHInegComparison_pruneProkUnk <- taxa_prune (SFtoHInegComparison_pruneProkUnk,'tax=k__no_hit','Kingdom')
+SFtoHInegComparison_pruneProkUnk 
+
+#removes the taxa level prefix assignments for plotting 
+tax_table(SFtoHInegComparison_pruneProkUnk)[, colnames(tax_table(SFtoHInegComparison_pruneProkUnk))] <- gsub(tax_table(SFtoHInegComparison_pruneProkUnk)[, colnames(tax_table(SFtoHInegComparison_pruneProkUnk))],     pattern = "tax=", replacement = "")
+tax_table(SFtoHInegComparison_pruneProkUnk)[, colnames(tax_table(SFtoHInegComparison_pruneProkUnk))] <- gsub(tax_table(SFtoHInegComparison_pruneProkUnk)[, colnames(tax_table(SFtoHInegComparison_pruneProkUnk))],     pattern = "[a-z]__", replacement = "")
+
+
+pre_SFtoHInegComparison_pruneProkUnk <- subset_samples (SFtoHInegComparison_pruneProkUnk, bonzai_sample_name%in%c("ESP99","ESP112","ESP113","ESP114"))
+post_SFtoHInegComparison_pruneProkUnk <- subset_samples(SFtoHInegComparison_pruneProkUnk, bonzai_sample_name%in%c("ESP100","ESP187"))
+
+#https://forum.qiime2.org/t/exporting-otu-table-from-phyloseq-into-either-biom-or-text-format/19103/6
+write_biom_csv <- function(ps, file, sep = "; ") {
+  phyloseq::otu_table(ps) %>%
+    as.data.frame() %>%
+    rownames_to_column("#OTU ID") %>%
+    left_join(phyloseq::tax_table(ps) %>% 
+                as.data.frame() %>%
+                rownames_to_column("#OTU ID") %>% 
+                tidyr::unite("taxonomy", !`#OTU ID`, sep = sep)) -> phyloseq_biom
+  
+  write_tsv(phyloseq_biom, file = file)
+}
+
+write_biom_csv (pre_SFtoHInegComparison_pruneProkUnk, file="tables/preNeg-Comparison.csv")
+write_biom_csv (post_SFtoHInegComparison_pruneProkUnk, file="tables/postNeg-Comparison.csv")
+```
+```{r}
+#Post Deployment Plot
+post <- read.table("tables/postNeg-Comparison.csv",sep="\t", header=T, comment="")
+post <- post %>% separate(taxonomy, c("Kingdom","Phylum","Class","Order","Family","Genus","Species"))
+post
+
+#Removes ASVs not present in the samples being compared
+post$countSum <- post$ESP100 + post$ESP187
+post <- post[post$countSum !=0, ]
+post
+post$ESP100 <- post$ESP100 + 1
+post$ESP187 <- post$ESP187 + 1
+
+p <- ggplot (post,aes(x = ESP100,y = ESP187)) + 
+  geom_point (pch = 21) +
+  #scale_fill_manual(values = custom) +
+  labs(x="log (Number of Sequences of ASV\nin Post Deployment Negative Control + 1)",y="log (Number of Sequences of ASV\nin Last Field Sample + 1)") +
+  scale_x_log10(labels = ~ format(.x, scientific = FALSE), limits = c(1, 200000)) +
+  scale_y_log10(labels = ~ format(.x, scientific = FALSE), limits = c(1, 200000)) +
+  theme(aspect.ratio=1) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed",
+              colour = "grey") +
+  theme (
+    legend.text = element_text(colour="black", size=10),
+    axis.ticks = element_line( size = 0.1),
+    #axis.text.x = element_text(size = 6, angle = 90, vjust = 0.5, hjust=1),
+    axis.line = element_line(size=0.1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white",
+                                colour = "white",
+                                size = 0.5, linetype = "solid")
+  )
+  
+p
+ggsave(file="figs/SI_PostNeg.pdf", plot=p, dpi=600)
+ggsave(file="figs/SI_PostNeg.eps", plot=p, dpi=600)
+```
+
+```{r}
+#Pre Deployment Plot
+pre <- read.table("tables/preNeg-Comparison.csv",sep="\t", header=T, comment="")
+pre <- pre %>% separate(taxonomy, c("Kingdom","Phylum","Class","Order","Family","Genus","Species"))
+pre
+
+#Removes ASVs not present in the samples being compared (This will have to get moved if the pivot works)
+pre$countSum <- pre$ESP99 +	pre$ESP112 +	pre$ESP113 + pre$ESP114
+pre <- pre[pre$countSum !=0, ]
+pre
+
+pivotpre= subset(pre, select = -c(countSum,Kingdom,Class,Order,Family,Genus,Species))
+pivotpre <- pivotpre %>% 
+        dplyr::rename("n1" = "ESP99",
+               "ESPpositive1" = "ESP112",
+               "ESPpositive2" = "ESP113",
+               "ESPpositive3" = "ESP114")
+pivotpre
+
+pivotpre <- pivotpre %>%  
+pivot_longer(cols = starts_with("ESPpositive"), names_to = "Pos", names_prefix = "pos_", values_to = "counts")
+pivotpre
+
+pivotpre$countSum <- pivotpre$n1 + pivotpre$counts
+pivotpre <- pivotpre[pivotpre$countSum !=0, ]
+pivotpre = subset(pivotpre, select = -c(countSum))
+pivotpre
+
+
+pivotpre$n1 <- pivotpre$n1 + 1
+pivotpre$counts <- pivotpre$counts + 1
+pivotpre
+
+pivotpre$Pos <- factor(pivotpre$Pos, levels = c("ESPpositive1", "ESPpositive2", "ESPpositive3"),
+                labels = c("ESP-1", "ESP-2","ESP-3")
+                 )
+
+
+p <- ggplot (pivotpre,aes(x = n1, y = counts)) + 
+  geom_point (pch = 21) +
+  #scale_fill_manual(values = custom) +
+  labs(x="log (Number of Sequences of ASV\nin Predeployment Negative Control + 1)",y="log (Number of Sequences\nof ASV in Positive Control + 1)") +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed",
+              colour = "grey") +
+  scale_x_log10(labels = ~ format(.x, scientific = FALSE), limits = c(1, 100000)) +
+  scale_y_log10(labels = ~ format(.x, scientific = FALSE), limits = c(1, 100000)) +
+  theme_bw () +
+  theme(aspect.ratio=1)
+p
+p <- p + 
+  facet_grid(. ~ Pos) +
+  theme(strip.background = element_blank()) 
+p
+ggsave(file="figs/SI_preNeg.pdf", plot=p, dpi=600)
+ggsave(file="figs/SI_preNeg.eps", plot=p, dpi=600)
+```

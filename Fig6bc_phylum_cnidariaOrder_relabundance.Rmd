@@ -1,0 +1,182 @@
+---
+title: "Figure 6bc - Phylum and Cniderian Order Diversity Plots"
+output: html_notebook
+---
+
+```{r}
+library(ggplot2)
+library(phyloseq)
+library(tidyverse)
+#devtools::install_github('schuyler-smith/phylosmith')
+library(phylosmith)
+#packageVersion("phylosmith")
+#citation("phylosmith")
+#if (!require("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#BiocManager::install("microbiome")
+```
+
+```{r}
+#SF to HI transit samples Only
+#Requires that intoPhyloseq.Rmd be run -- need the phylseq object
+SFtoHI <- subset_samples(ps, sample_type3%in%c("field"))
+SFtoHI
+ntaxa(SFtoHI)
+#Remove Bacteria and Archaea sequences and all unknown, unassigned, no hit
+SFtoHI_pruneBac <- taxa_prune(SFtoHI,'tax=k__Bacteria','Kingdom')
+SFtoHI_pruneProk <- taxa_prune(SFtoHI_pruneBac,'tax=k__Archaea','Kingdom')
+SFtoHI_pruneProkUnk <- taxa_prune (SFtoHI_pruneProk,'tax=k__unassigned','Kingdom')
+SFtoHI_pruneProkUnk <- taxa_prune (SFtoHI_pruneProkUnk,'tax=k__unknown','Kingdom')
+SFtoHI_pruneProkUnk <- taxa_prune (SFtoHI_pruneProkUnk,'tax=k__no_hit','Kingdom')
+
+get_taxa_unique(SFtoHI_pruneProk, "Kingdom")
+get_taxa_unique(SFtoHI_pruneProkUnk, "Kingdom")
+get_taxa_unique(SFtoHI_pruneProkUnk, "Phylum")
+ntaxa(SFtoHI_pruneProkUnk)
+estimate_richness(SFtoHI_pruneProk, measures=c("Shannon","Chao1"))
+estimate_richness(SFtoHI_pruneProk)
+
+
+plot_richness(SFtoHI_pruneProk)
+plot_richness(SFtoHI_pruneProk, measures=c("Chao1"))
+plot_richness(SFtoHI_pruneProk, measures=c("Shannon"))
+plot_richness(SFtoHI_pruneProk, measures=c("Simpson"))
+
+
+#Converted data to factors before import into phyloseq (see intoPhyloseq.Rmd)
+#reorder factors for appropriate plotting of x-axis
+sample_data(SFtoHI_pruneProkUnk)$LongitudeStart = factor (sample_data(SFtoHI_pruneProkUnk)$LongitudeStart, levels = c("-156.5753344","-156.394752","-156.1964544","-156.0071808","-155.8170496","-155.6303104","-152.0126976","-151.4400384","-150.5543808","-149.669184","-148.859776","-148.4449024","-147.50304","-146.891008","-146.08032","-145.3692544","-144.4879744","-143.963968","-143.6073216","-142.8519424","-142.0381312","-141.0992896","-140.1472512","-139.0586496","-138.290816","-137.6180352","-137.023872","-136.3691008","-135.5412352","-134.5756928","-133.8662528","-133.1488384","-132.2938624","-131.430848","-130.5881984","-129.732928","-128.758464","-128.0589568","-127.14208","-126.8928512","-126.2492928","-125.7092224","-125.3552256","-124.635136","-124.4221568","-124.326912","-123.7561344","-122.9131776","-122.6213504","-122.4844928","-122.402048","-122.337728"))
+
+LonLabelOrder2si = c("-156.58","-156.39","-156.20","-156.01","-155.82","-155.63","-152.01","-151.44","-150.55","-149.67","-148.86","-148.44","-147.50","-146.89","-146.08","-145.37","-144.49","-143.96","-143.61","-142.85","-142.04","-141.10","-140.15","-139.06","-138.29","-137.62","-137.02","-136.37","-135.54","-134.58","-133.87","-133.15","-132.29","-131.43","-130.59","-129.73","-128.76","-128.09","-127.14","-126.89","-126.25","-125.71","-125.36","-124.64","-124.42","-124.33","-123.76","-122.91","-122.62","-122.48","-122.40","-122.34")
+
+LonLabelOrder2si_lim = c("-156.6","","","","","","","","","","","","","","","","","","","","","","","","","","-137.0","","","","","","","","","","","","","","","","","","","","","","","","","-122.3")
+
+#confirm it's in the desired order
+levels(sample_data(SFtoHI_pruneProkUnk)$LongitudeStart) 
+
+#removes the taxa level assignments for the phyla for plotting
+tax_table(SFtoHI_pruneProkUnk)[, colnames(tax_table(SFtoHI_pruneProkUnk))] <- gsub(tax_table(SFtoHI_pruneProkUnk)[, colnames(tax_table(SFtoHI_pruneProkUnk))],     pattern = "tax=", replacement = "")
+tax_table(SFtoHI_pruneProkUnk)[, colnames(tax_table(SFtoHI_pruneProkUnk))] <- gsub(tax_table(SFtoHI_pruneProkUnk)[, colnames(tax_table(SFtoHI_pruneProkUnk))],     pattern = "[a-z]__", replacement = "")
+get_taxa_unique(SFtoHI_pruneProkUnk, "Phylum")
+get_taxa_unique(SFtoHI_pruneProkUnk, "Class")
+
+#Change to relative abundance
+SFtoHI_pruneProkUnk_rel <- microbiome::transform(SFtoHI_pruneProkUnk, "compositional")
+```
+
+```{r}
+#Get Data -- collapsed to phylum
+#TaxaPlot based on >X% of sequences  based on https://github.com/joey711/phyloseq/issues/901
+SFtoHI_pruneProkUnk_rel 
+get_taxa_unique(SFtoHI_pruneProkUnk_rel, "Phylum")  
+
+glom <- tax_glom(SFtoHI_pruneProkUnk_rel, taxrank = 'Phylum')
+glom # should list # taxa as # phyla
+data_glom<- psmelt(glom) # create dataframe from phyloseq object
+data_glom$Phylum <- as.character(data_glom$Phylum) #convert to character
+
+#simple way to rename phyla with < 1% abundance
+data_glom$Phylum[data_glom$Abundance < 0.01] <- "< 1% abund."
+
+unique(data_glom$Phylum)
+Count = length(unique(data_glom$Phylum))
+Count
+
+data_glom$Phylum <- factor(data_glom$Phylum, levels = c("unassigned","Arthropoda","Cnidaria","Ochrophyta","Bacillariophyta","Haptista","Discosea","Picozoa","Rhodophyta","Rotifera","Mollusca","Annelida","Porifera","Imbricatea","Echinodermata","Chlorophyta","Myzozoa","Cryptophyta","Cercozoa","Oomycota","< 1% abund."))
+
+custom_onepercnt = c("#D3D3D3","#B997C7","#824D99","#7EB875","#117744","#57A2AC","#4E78C4","#D0B541","#E67F33","#CE2220","#521A13","#F9ECCC","#63b8ff","#27408b","#44AA77","#F7EE7F","#e9967a","#F26157","#AA4455","#000000")
+
+#custom_onepercnt = c("#B997C7","#824D99","#4E78C4","#57A2AC","#7EB875","#D0B541","#E67F33","#CE2220","#521A13","#e9967a","#63b8ff","#1874cd","#27408b","#117744","#000000")
+
+phylum1percent <- ggplot(data=data_glom, aes(x=LongitudeStart, y=Abundance, fill=Phylum)) + 
+geom_bar(aes(), stat="identity", position="stack") +
+theme(panel.background = element_blank()) +
+theme_bw(base_size = 10) +  
+labs(x="Longitude",y="Relative Abundance") +
+labs(fill='Phylum') +
+theme(legend.key.size = unit(.3,'cm')) + guides(col = guide_legend(nrow = 17)) +
+scale_x_discrete(labels = LonLabelOrder2si_lim) +
+scale_y_continuous (limits = c(0,1), expand = c(0, 0)) +  
+scale_fill_manual(values = custom_onepercnt) +
+theme (
+    legend.text = element_text(colour="black", size=10),
+    axis.ticks = element_line( size = 0.1),
+    axis.text.x = element_text(size = 6, angle = 90, vjust = 0.5, hjust=1),
+    axis.line = element_line(size=0.1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white",
+                                colour = "white",
+                                size = 0.5, linetype = "solid")
+  )
+
+phylum1percent <-  phylum1percent +
+   theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank()
+    )
+
+phylum1percent
+  
+#phylum1percent_noLegend <- phylum1percent + theme(legend.position="none")
+#phylum1percent_noLegend
+
+#Save files, vector (svg) and png
+#ggsave(file="figs/phylum1percent.pdf", plot=phylum1percent, dpi=600)
+#ggsave(file="figs/phylum1percent1.pdf", plot=phylum1percent, scale=.55, dpi=600)
+#ggsave(file="figs/phylum1percent_noLegend.eps", plot=phylum1percent_noLegend, scale=.55, dpi=600)
+
+```
+
+```{r}
+## Sequences assigned to Cnideria
+cnidaria_taxa <- subset_taxa(SFtoHI_pruneProkUnk, Phylum == "Cnidaria")
+cnidaria_rel <- microbiome::transform(cnidaria_taxa, "compositional")
+
+glomcnidaria <- tax_glom(cnidaria_rel, taxrank = 'Order')
+glomcnidaria  # should list # taxa as # phyla
+data_glomcnidaria <- psmelt(glomcnidaria) # create dataframe from phyloseq object
+data_glomcnidaria$Order <- as.character(data_glomcnidaria$Order) #convert to character
+
+#simple way to rename phyla with < 1% abundance
+data_glomcnidaria$Order[data_glomcnidaria$Abundance < 0.001] <- "< 0.1% abund."
+
+#unique(data_glomcnidaria$Class)
+unique(data_glomcnidaria$Order)
+Count = length(unique(data_glomcnidaria$Order))
+Count
+
+custom_cnidar = c("#D3D3D3","#27408b","#4E78C4","#63b8ff","#57A2AC","#D0B541","#E67F33","#CE2220","#e9967a","#521A13","#000000")
+
+data_glomcnidaria$Order <- factor(data_glomcnidaria$Order, levels = c("unassigned","Anthoathecata","Leptothecata","Narcomedusae","Pennatulacea","Scleractinia","Semaeostomeae","Siphonophorae","Trachymedusae","Stauromedusae","< 0.1% abund."))
+
+cnidaria <- ggplot(data=data_glomcnidaria, aes(x=LongitudeStart, y=Abundance, fill = Order)) + 
+geom_bar(aes(), stat="identity", position="stack") +
+theme(panel.background = element_blank()) +
+theme_bw(base_size = 10) +  
+#theme_gray(base_size = 10, base_family = "serif") + # font not working if export as eps error family 'sans' not included in postscript() device
+theme(axis.text.x = element_text(size = 6, angle = 90, vjust = 0.5, hjust=1)) +
+labs(x="Longitude",y="Relative Abundance") +
+theme(legend.key.size = unit(.3,'cm')) + guides(col = guide_legend(nrow = 17)) +
+labs(fill='Cnidaria Order') +
+scale_x_discrete(labels = LonLabelOrder2si_lim) +
+scale_y_continuous (limits = c(0,1), expand = c(0, 0)) + 
+scale_fill_manual(values = custom_cnidar) +
+theme (
+    legend.text = element_text(colour="black", size=10),
+    axis.ticks = element_line( size = 0.1),
+    axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust=1),
+    axis.line = element_line(size=0.1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+cnidaria
+
+#cnidaria_noLegend <- cnidaria + theme(legend.position="none")
+#cnidaria_noLegend
+
+#Save files, vector (svg) and png
+#ggsave(file="figs/cnidaria.pdf", plot=cnidaria, dpi=600)
+#ggsave(file="figs/cnidaria.pdf", plot=cnidaria, width=5, height=3, units= c("in"), dpi=600)
+#ggsave(file="figs/cnidaria_noLegend.eps", plot=cnidaria_noLegend, width=5, height=3, units= c("in"), dpi=600)
+```

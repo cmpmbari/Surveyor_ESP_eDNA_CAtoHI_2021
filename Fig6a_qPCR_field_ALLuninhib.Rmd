@@ -1,0 +1,89 @@
+---
+title: "Figure 6a: Transit samples qPCR"
+output: html_notebook
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+#install.packages("ggbreak")
+library(ggbreak) 
+```
+
+```{r}
+#Get data into R
+qpcr2 <- read.table ("data/2022mar25_ALL_trim_sortV3.txt", sep='\t', header=T, row.names=1, comment="")
+qpcr2
+
+#qPCR plot for 18S and 16S at 0.02 dilution for all samples
+qpcr_transit <- subset(qpcr2, sampleType == 'field')
+qpcr_transit <- subset(qpcr_transit, Target.Name=='18S' | Target.Name=='16S')
+#qpcr_transit <- subset(qpcr_transit, qPCRDilution=="0.02")
+
+#full data set lat/log imported as character, after subset, reclassify data as numeric. 
+qpcr_transit$LongitudeStart <- as.factor(as.character(qpcr_transit$LongitudeStart))
+qpcr_transit$Target.Name <- as.factor(as.character(qpcr_transit$Target.Name))
+qpcr_transit$PCRSampleName <- as.factor(as.character(qpcr_transit$PCRSampleName))
+qpcr_transit$qPCRDilution <- as.factor(as.character(qpcr_transit$qPCRDilution))
+qpcr_transit$Ct <- as.numeric(as.character(qpcr_transit$Ct))
+qpcr_transit
+
+qpcr_transit$LongitudeStart = factor (qpcr_transit$LongitudeStart, levels = c("-156.5753344","-156.394752","-156.1964544","-156.0071808","-155.8170496","-155.6303104","-152.0126976","-151.4400384","-150.5543808","-149.669184","-148.859776","-148.4449024","-147.50304","-146.891008","-146.08032","-145.3692544","-144.4879744","-143.963968","-143.6073216","-142.8519424","-142.0381312","-141.0992896","-140.1472512","-139.0586496","-138.290816","-137.6180352","-137.023872","-136.3691008","-135.5412352","-134.5756928","-133.8662528","-133.1488384","-132.2938624","-131.430848","-130.5881984","-129.732928","-128.758464","-128.0589568","-127.14208","-126.8928512","-126.2492928","-125.7092224","-125.3552256","-124.635136","-124.4221568","-124.326912","-123.7561344","-122.9131776","-122.6213504","-122.4844928","-122.402048","-122.337728"))
+
+LonLabelOrder = c("-156.58","-156.39","-156.20","-156.01","-155.82","-155.63","-152.01","-151.44","-150.55","-149.67","-148.86","-148.44","-147.50","-146.89","-146.08","-145.37","-144.49","-143.96","-143.61","-142.85","-142.04","-141.10","-140.15","-139.06","-138.29","-137.62","-137.02","-136.37","-135.54","-134.58","-133.87","-133.15","-132.29","-131.43","-130.59","-129.73","-128.76","-128.09","-127.14","-126.89","-126.25","-125.71","-125.36","-124.64","-124.42","-124.33","-123.76","-122.91","-122.62","-122.48","-122.40","-122.34")
+
+
+```
+
+
+```{r}
+qpcr_transit_summary <- 
+  qpcr_transit %>% 
+  group_by(LongName,Target.Name,LongitudeStart) %>%
+  dplyr::summarize(Ave_LODLOQ_cpMLSW = mean(LODLOQ_cpMLSW),
+            CI_lower = Ave_LODLOQ_cpMLSW - (1.96 * sd(LODLOQ_cpMLSW)/sqrt(n())),
+            CI_upper = Ave_LODLOQ_cpMLSW + (1.96 * sd(LODLOQ_cpMLSW)/sqrt(n()))
+            )
+qpcr_transit_summary
+
+custom_pcr = c("#A9A9A9","#000000","blue")
+
+fig_qPCR_16S18S <- ggplot (qpcr_transit_summary, aes(x = LongitudeStart, 
+                            y = Ave_LODLOQ_cpMLSW, color = Target.Name), x=log) +
+  theme_bw()+
+  geom_point (size = 0.5) + theme_bw(base_size = 10) +
+  geom_line (size = 0.1, group = interaction (qpcr_transit_summary$Target.Name)) +
+  geom_errorbar(aes(ymin=CI_lower, ymax=CI_upper), width=0.1, size = 0.1) +  
+  labs(x="Longitude",y="genes per ml seawater") +
+  theme(axis.text = element_text(colour="black", size=8)) +
+  theme(axis.title = element_text(size = 10)) +
+  scale_x_discrete(labels = LonLabelOrder) +
+  #scale_y_break (c(1, 1000)) +
+  #scale_y_log10 (breaks = c(1000,10000,100000,1000000,10000000), limits = c(1,10000000), expand =c(0,0)) +
+  scale_y_log10 (breaks = c(1000,10000,100000,1000000,10000000), limits = c(1000,10000000), expand =c(0,0)) +
+  annotation_logticks(sides="l", size=0.1) +
+  scale_color_manual(values = custom_pcr, labels = c("16S rRNA","18S rRNA") )+
+  labs(color='') + #remove title on legend
+  theme (
+    legend.text = element_text(colour="black", size=10),
+    legend.background = element_blank(), #legend text not filled
+    legend.key=element_blank(), #keys not filled
+    axis.ticks = element_line( size = 0.1),
+    axis.text.x = element_text(size = 6, angle = 90, vjust = 0.5, hjust=1),
+    axis.line = element_line(size=0.1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+#https://stackoverflow.com/questions/70423166/warnings-when-transforming-to-logarithmic-scale-a-lot-of-nans-produced
+fig_qPCR_16S18S <- fig_qPCR_16S18S +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank()
+   ) 
+
+fig_qPCR_16S18S
+
+write.csv(qpcr_transit_summary,"tables/qpcr_transit_summary.csv", row.names = FALSE)
+#ggsave(file="figs/fig_qPCR_16S18Sgg.eps", plot=fig_qPCR_16S18S, dpi=600)
+```

@@ -1,0 +1,199 @@
+---
+title: "Figure 4 Positive Control (qPCR barplot) & Figure 5 Negative control (qPCR barplot). "
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+#install.packages("rstatix")
+library(rstatix)
+#install.packages("DescTools")
+library(DescTools) #for Dunnett's Test
+library(cowplot)
+library(dplyr)
+```
+
+
+```{r}
+qpcrSFtoHIonly2 <- read.table ("data/2022mar25_ALL_trim_sortV3.txt", sep='\t', header=T, row.names=1, comment="")
+qpcrSFtoHIonly2
+
+#Plot Positive Control, Get 1:50 dilution (SAR11, PsuedG, 18S, 16S, undiluted = Anchovy)
+qpcrSFtoHIonly_pos2 <- subset(qpcrSFtoHIonly2, sampleType=='positiveControl')
+qpcrSFtoHIonly_pos2 <- subset(qpcrSFtoHIonly_pos2, qPCRDilution=='0.02' | qPCRDilution=='1')
+qpcrSFtoHIonly_pos2
+
+qpcrSFtoHIonly_pos2$Target.Name <- as.factor(as.character(qpcrSFtoHIonly_pos2$Target.Name))
+qpcrSFtoHIonly_pos2$Instrument <- as.factor(qpcrSFtoHIonly_pos2$Instrument)
+
+qpcrSFtoHIonly_pos2_summary <- 
+  qpcrSFtoHIonly_pos2 %>% 
+  group_by(Target.Name,Instrument) %>%
+  dplyr::summarize(Ave_LODLOQ_cpMLSW = mean(LODLOQ_cpMLSW),
+            SD_LODLOQ_cpMLSW = sd(LODLOQ_cpMLSW),
+            se = SD_LODLOQ_cpMLSW /sqrt(n()),
+            CI_lower = Ave_LODLOQ_cpMLSW - (1.96 * se),
+            CI_upper = Ave_LODLOQ_cpMLSW + (1.96 * se)
+            )
+qpcrSFtoHIonly_pos2_summary
+
+qpcrSFtoHIonly_pos2_summary$Target.Name <- factor(qpcrSFtoHIonly_pos2_summary$Target.Name, 
+                                              levels = c("16S","SAR11","18S","PseudG","Anchovy"))
+qpcrLabels2 <- c("16S rRNA","SAR11 rRNA","18S rRNA","Pseudo rRNA","Anchovy dLoop")
+
+qpcrSFtoHIonly_pos2_summary$Ave_LODLOQ_cpMLSWplus1 <- qpcrSFtoHIonly_pos2_summary$Ave_LODLOQ_cpMLSW + 1
+limits_CI <- aes(ymax = CI_upper, ymin = CI_lower)
+
+qpcrSFtoHIonly_pos2_summary_bar  <- 
+  ggplot (data = qpcrSFtoHIonly_pos2_summary, aes(x = Target.Name, y = Ave_LODLOQ_cpMLSWplus1, 
+                                                  fill = Instrument, color = Instrument))
+
+fig4 <- qpcrSFtoHIonly_pos2_summary_bar + geom_bar(stat="identity",
+             position = position_dodge(0.9)) +
+  geom_errorbar(limits_CI, position = position_dodge(0.9), width = 0.25) +
+  scale_y_log10 (breaks = c(1,10,100,1000,10000,100000,1000000,10000000,100000000), 
+                 limits = c(1,100000000), expand =c(0,0)) +
+  labs(x = "Assay", y = "(copies + 1) per ml seawater") +
+  annotation_logticks(sides="l", size=0.1) +
+  theme_minimal() +
+  scale_fill_manual (values= c("#333333","#CCCCCC")) +
+  scale_color_manual (values= c("black","black")) +
+  scale_x_discrete(labels = qpcrLabels2) +
+  guides (color = "none") +
+  theme (
+    legend.text = element_text(colour="black", size=10),
+    legend.background = element_blank(), #legend text not filled
+    legend.key=element_blank(), #keys not filled
+    axis.ticks = element_line( size = 0.1),
+    axis.text.x = element_text(size = 10),  
+    axis.line = element_line(size=0.1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+fig4 <- fig4 + theme(legend.position = "none")
+
+#export with cowplot
+Figure4_posControl <- plot_grid (fig4,
+           #align ="v",
+           #labels = "A", 
+           #axis = "b",
+           ncol = 1)
+Figure4_posControl
+
+save_plot(
+  filename = "figs/Figure4_posControl.pdf",
+  plot = fig4,
+  ncol = 1,
+  nrow = 1,
+  base_height = 3.71,
+  base_asp = 1.618,
+  dpi=600)
+```
+
+```{r}
+#Data subsetted into assay type (Target.Name)
+qpcrSFtoHIonly_pos2
+qpcrSFtoHIonly_pos2_18S <- subset(qpcrSFtoHIonly_pos2, Target.Name=='18S')
+qpcrSFtoHIonly_pos2_18S
+qpcrSFtoHIonly_pos2_16S <- subset(qpcrSFtoHIonly_pos2, Target.Name=='16S')
+qpcrSFtoHIonly_pos2_SAR11 <- subset(qpcrSFtoHIonly_pos2, Target.Name=='SAR11')
+qpcrSFtoHIonly_pos2_PseudG <- subset(qpcrSFtoHIonly_pos2, Target.Name=='PseudG')
+qpcrSFtoHIonly_pos2_PseudG
+
+#Kruskal-Wallis Test
+kruskal.test (LODLOQ_cpMLSW ~ Instrument, data = qpcrSFtoHIonly_pos2_18S)
+kruskal.test (LODLOQ_cpMLSW ~ Instrument, data = qpcrSFtoHIonly_pos2_16S)
+kruskal.test (LODLOQ_cpMLSW ~ Instrument, data = qpcrSFtoHIonly_pos2_SAR11)
+#kruskal.test (LODLOQ_cpMLSW ~ Instrument, data = qpcrSFtoHIonly_pos2_PseudG)
+
+
+qpcrSFtoHIonly_pos2_18S %>% kruskal_effsize(LODLOQ_cpMLSW ~ Instrument)
+#qpcrSFtoHIonly_pos2_16S %>% kruskal_effsize(LODLOQ_cpMLSW ~ Instrument)
+#qpcrSFtoHIonly_pos2_SAR11 %>% kruskal_effsize(LODLOQ_cpMLSW ~ Instrument)
+#qpcrSFtoHIonly_pos2_PseudG %>% kruskal_effsize(LODLOQ_cpMLSW ~ Instrument)
+```
+
+```{r}
+#Negative Controls 
+qpcrSFtoHIonly_neg2 <- subset(qpcrSFtoHIonly2, sampleType=='negativeControl')
+qpcrSFtoHIonly_neg2
+
+qpcrSFtoHIonly_neg2$Target.Name <- as.factor(as.character(qpcrSFtoHIonly_neg2$Target.Name))
+qpcrSFtoHIonly_neg2$Ct <- as.numeric(as.character(qpcrSFtoHIonly_neg2$Ct))
+qpcrSFtoHIonly_neg2$sampleType2 <- as.factor(qpcrSFtoHIonly_neg2$sampleType2)
+
+qpcrSFtoHIonly_neg2_summary <- 
+  qpcrSFtoHIonly_neg2 %>% 
+  group_by(PCRSampleName, Target.Name, sampleType, sampleType2,Instrument) %>%
+  dplyr::summarize(Ave_LODLOQ_cpMLSW = mean(LODLOQ_cpMLSW),
+            SD_LODLOQ_cpMLSW = sd(LODLOQ_cpMLSW),
+            Ave_Ct = mean(Ct),
+            SD_Ct = sd(Ct),
+            se = SD_LODLOQ_cpMLSW / sqrt(n()),
+            CI_lower = Ave_LODLOQ_cpMLSW - (1.96 * se),
+            CI_upper = Ave_LODLOQ_cpMLSW + (1.96 * se)
+            )
+qpcrSFtoHIonly_neg2_summary
+qpcrSFtoHIonly_neg2_summary$CI_lower [qpcrSFtoHIonly_neg2_summary$CI_lower < 0] = 0
+qpcrSFtoHIonly_neg2_summary
+
+qpcrSFtoHIonly_neg2_summary$Target.Name <- factor(qpcrSFtoHIonly_neg2_summary$Target.Name, 
+                                              levels = c("16S","SAR11","18S","PseudG","Anchovy"))
+qpcrLabels2 <- c("16S rRNA","SAR11 rRNA","18S rRNA","Pseudo rRNA","Anchovy dLoop")
+qpcrSFtoHIonly_neg2_summary$sampleType2 <- factor(qpcrSFtoHIonly_neg2_summary$sampleType2, 
+                                              levels = c("negativeControlstart","negativeControlend"))
+
+qpcrSFtoHIonly_neg2_summary$Ave_LODLOQ_cpMLSWplus1 <- qpcrSFtoHIonly_neg2_summary$Ave_LODLOQ_cpMLSW + 1
+limits_CI_neg <- aes(ymax = CI_upper+1, ymin = CI_lower+1)
+
+qpcrSFtoHIonly_neg2_summary_bar  <- 
+  ggplot (data = qpcrSFtoHIonly_neg2_summary, aes(x = Target.Name, y = Ave_LODLOQ_cpMLSWplus1, 
+                                                  fill = sampleType2, color = sampleType2))
+
+fig5 <- qpcrSFtoHIonly_neg2_summary_bar + geom_bar(stat="identity",
+             position = position_dodge(0.9)) +
+  geom_errorbar(limits_CI_neg, position = position_dodge(0.9), width = 0.25) +
+  scale_y_log10 (breaks = c(1,10,100,1000,10000,100000,1000000,10000000,100000000), 
+                 limits = c(1,100000000), expand =c(0,0)) +
+  labs(x = "Assay", y = "copies per ml seawater + 1") +
+  annotation_logticks(sides="l", size=0.1) +
+  theme_minimal() +
+  scale_fill_manual (values= c("#D3D3D3","#777777")) +
+  scale_color_manual (values= c("black","black")) +
+  scale_x_discrete(labels = qpcrLabels2) +
+  guides (color = "none") +
+  theme (
+    legend.text = element_text(colour="black", size=10),
+    legend.background = element_blank(), #legend text not filled
+    legend.key=element_blank(), #keys not filled
+    axis.ticks = element_line( size = 0.1),
+    axis.text.x = element_text(size = 10),  
+    axis.line = element_line(size=0.1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+fig5
+
+fig5 <- fig5 + theme(legend.position = "none")
+fig5
+
+#export with cowplot
+Figure5_negControl <- plot_grid (fig5,
+           #align ="v",
+           #labels = "A", 
+           #axis = "b",
+           ncol = 1)
+Figure5_negControl
+
+save_plot(
+  filename = "figs/Figure5_negControl.pdf",
+  plot = fig5,
+  ncol = 1,
+  nrow = 1,
+  base_height = 3.71,
+  base_asp = 1.618,
+  dpi=600)
+
+```
+

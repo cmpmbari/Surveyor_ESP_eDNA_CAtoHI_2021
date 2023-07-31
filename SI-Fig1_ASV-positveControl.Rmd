@@ -1,0 +1,218 @@
+---
+title: "Positive Control - SI_Figure1 ASV counts"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(ggplot2)
+library(phyloseq)
+library(tidyverse)
+library(phylosmith)
+library(readr)
+library(plyr)
+#install.packages("stringr")         
+library("stringr")                
+```
+
+```{r}
+SFtoHIpositive <- subset_samples(ps, sample_type5%in%c("prePositive"))
+SFtoHIpositive
+
+#Remove Bacteria and Archaea sequences and all unknown, unassigned, no hit
+SFtoHIpositive_pruneBac <- taxa_prune(SFtoHIpositive,'tax=k__Bacteria','Kingdom')
+SFtoHIpositive_pruneProk <- taxa_prune(SFtoHIpositive_pruneBac,'tax=k__Archaea','Kingdom')
+SFtoHIpositive_pruneProkUnk <- taxa_prune (SFtoHIpositive_pruneProk,'tax=k__unassigned','Kingdom')
+SFtoHIpositive_pruneProkUnk <- taxa_prune (SFtoHIpositive_pruneProkUnk,'tax=k__unknown','Kingdom')
+SFtoHIpositive_pruneProkUnk <- taxa_prune (SFtoHIpositive_pruneProkUnk,'tax=k__no_hit','Kingdom')
+SFtoHIpositive_pruneProkUnk 
+
+#removes the taxa level assignments for the phyla for plotting
+tax_table(SFtoHIpositive_pruneProkUnk)[, colnames(tax_table(SFtoHIpositive_pruneProkUnk))] <- gsub(tax_table(SFtoHIpositive_pruneProkUnk)[, colnames(tax_table(SFtoHIpositive_pruneProkUnk))],     pattern = "tax=", replacement = "")
+tax_table(SFtoHIpositive_pruneProkUnk)[, colnames(tax_table(SFtoHIpositive_pruneProkUnk))] <- gsub(tax_table(SFtoHIpositive_pruneProkUnk)[, colnames(tax_table(SFtoHIpositive_pruneProkUnk))],     pattern = "[a-z]__", replacement = "")
+
+
+#Determine what phylum are < 1%
+#Change to relative abundance
+#https://github.com/joey711/phyloseq/issues/901
+SFtoHIpositive_pruneProkUnk_rel <- microbiome::transform(SFtoHIpositive_pruneProkUnk, "compositional")
+glom <- tax_glom(SFtoHIpositive_pruneProkUnk_rel, taxrank = 'Phylum')
+glom # should list # taxa as # phyla
+data_glom<- psmelt(glom) # create dataframe from phyloseq object
+data_glom$Phylum <- as.character(data_glom$Phylum) #convert to character
+data_glom
+#simple way to rename phyla with < 1% abundance
+data_glom$Phylum[data_glom$Abundance < 0.01] <- "< 1% abund."
+uni <- unique(data_glom$Phylum)
+Count = length(unique(data_glom$Phylum))
+Count
+uni 
+
+
+#https://forum.qiime2.org/t/exporting-otu-table-from-phyloseq-into-either-biom-or-text-format/19103/6
+write_biom_csv <- function(ps, file, sep = "; ") {
+  phyloseq::otu_table(ps) %>%
+    as.data.frame() %>%
+    rownames_to_column("#OTU ID") %>%
+    left_join(phyloseq::tax_table(ps) %>% 
+                as.data.frame() %>%
+                rownames_to_column("#OTU ID") %>% 
+                tidyr::unite("taxonomy", !`#OTU ID`, sep = sep)) -> phyloseq_biom
+  
+  write_tsv(phyloseq_biom, file = file)
+}
+
+write_biom_csv (SFtoHIpositive_pruneProkUnk,file="tables/SFtoHIpos.csv")
+
+posTest <- read.table("tables/SFtoHIpos.csv",sep="\t", header=T, comment="")
+posTest <- posTest %>% separate(taxonomy, c("Kingdom","Phylum","Class","Order","Family","Genus","Species"))
+posTest
+pos = posTest
+pos
+
+pos$countSum <- pos$ESP112 + pos$ESP113 + pos$ESP114 + pos$ESP115 + pos$ESP116 + pos$ESP117
+pos <- pos[pos$countSum !=0, ]
+pos
+unique(pos$Phylum)
+
+pivotPos= subset(pos, select = -c(countSum,Kingdom,Class,Order,Family,Genus,Species))
+pivotPos
+pivotPos <- pivotPos %>% 
+        dplyr::rename("ESPpos1" = "ESP112",
+               "ESPpos2" = "ESP113",
+               "ESPpos3" = "ESP114",
+               "Manualpos1" = "ESP115",
+               "Manualpos2" = "ESP116",
+               "Manualpos3" = "ESP117")
+pivotPos
+
+pivotPos <- pivotPos %>%  
+pivot_longer(cols = starts_with("ESP"), names_to = "ESP_pos", names_prefix = "ESPpos_", values_to = "ESP_counts") %>% 
+pivot_longer(cols = starts_with("Manual"), names_to = "Manual_pos", names_prefix = "ManPos_", values_to = "Manual_counts")
+
+pivotPos$countSum <- pivotPos$ESP_counts + pivotPos$Manual_counts
+pivotPos <- pivotPos[pivotPos$countSum !=0, ]
+
+
+pivotPos$Phylum[pivotPos$Phylum == 'Rhodophyta'] <- "< 0.1% abund." 
+pivotPos$Phylum[pivotPos$Phylum == 'Mollusca'] <- "< 0.1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Imbricatea'] <- "< 0.1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Echinodermata'] <- "0.1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Eustigmatophyceae'] <- "< 0.1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Basidiomycota'] <- "< 0.1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Mucoromycota'] <- "< 0.1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Myzozoa'] <- "< 0.1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Cercozoa'] <- "< 0.1% abund."
+
+
+pivotPos$Phylum[pivotPos$Phylum == 'Cnidaria'] <- "< 1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Discosea'] <- "< 1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Porifera'] <- "< 1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Chlorophyta'] <- "< 1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Chordata'] <- "< 1% abund."
+pivotPos$Phylum[pivotPos$Phylum == 'Cryptophyta'] <- "< 1% abund."
+#Assign <0.1% to <1% 
+pivotPos$Phylum[pivotPos$Phylum == "< 0.1% abund."] <- "< 1% abund."
+
+unique(pivotPos$Phylum)
+pivotPos$Phylum
+
+pivotPos$Phylum <- factor(pivotPos$Phylum, levels = c("Ascomycota","Rotifera","Bacillariophyta","Picozoa","Ochrophyta","Haptista","Oomycota","Annelida","Arthropoda","unassigned","< 1% abund."))
+unique(pivotPos$Phylum)
+
+custom = c("#5A5A5A","#CE2220","#117744","#D0B541","#7EB875","#57A2AC","#AA4455","#F9ECCC","#B997C7","#D3D3D3","#000000")
+
+pivotPos$Manual_pos <- factor(pivotPos$Manual_pos, levels = c("Manualpos1", "Manualpos2", "Manualpos3"), 
+                  labels = c("Manual-1", "Manual-2", "Manual-3"))
+pivotPos$ESP_pos <- factor(pivotPos$ESP_pos, levels = c("ESPpos1", "ESPpos2", "ESPpos3"),
+                  labels = c("ESP-1", "ESP-2","ESP-3")
+                  )
+ 
+pivotPosAver= pivotPos
+
+pivotPos$ESP_counts <- pivotPos$ESP_counts + 1
+pivotPos$Manual_counts <- pivotPos$Manual_counts +1
+pivotPos
+unique(pivotPos$Phylum)
+ 
+
+p <- ggplot (pivotPos,aes(x = ESP_counts,y = Manual_counts, fill = Phylum)) + 
+  geom_point (pch = 21) +
+  ylim(1,100000) +
+  xlim(1,100000) +
+  scale_fill_manual(values = custom) +
+  labs(x="log (Number of sequences in ASV\nfrom ESP Sample + 1)",
+       y="log (Number of sequences in ASV\nfrom Manual Sample + 1)") +
+  scale_x_log10() +
+  scale_y_log10() +
+  theme (axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust=1)) +
+  theme (axis.text.y = element_text(size = 8,vjust = 0.5, hjust=1)) +
+  theme(aspect.ratio=1) +
+  theme(legend.key=element_blank()) +
+  theme_bw ()
+  
+q <- p + geom_abline(intercept = 0, slope = 1, linetype = "dashed", colour = "grey")
+q
+
+p <- p + 
+  facet_grid(rows = vars(pivotPos$ESP_pos), cols = vars(pivotPos$Manual_pos)) +
+  theme(strip.background = element_blank())
+
+p
+
+#p + geom_abline(intercept = 0, slope = 1, linetype = "dashed", colour = "grey")
+
+ggsave(file="figs/SI_PositiveCounts.pdf", plot=p, dpi=600)
+ggsave(file="figs/SI_PositiveCounts.eps", plot=p, dpi=600)
+
+#ggsave(file="figs/SI_PositiveCounts_OneGraph.pdf", plot=q, dpi=600)
+```
+
+```{r}
+pivotPosAver
+espPos <- aggregate(pivotPosAver$ESP_counts, by = list(pivotPosAver$X.OTU.ID, pivotPosAver$Phylum), FUN=mean) 
+espPos
+espPos <- espPos %>% 
+        dplyr::rename("ASV" = "Group.1" ,
+               "Phylum" = "Group.2" ,
+               "ESP_counts" = "x")
+espPos
+
+manPos <- aggregate(pivotPosAver$Manual_counts, by = list(pivotPosAver$X.OTU.ID, pivotPosAver$Phylum), FUN=mean) 
+manPos <- manPos %>% 
+        dplyr::rename("ASV" = "Group.1" ,
+               "Phylum" = "Group.2" ,
+               "Manual_counts" = "x")
+manPos
+
+meanSum <- merge(espPos, manPos,by=c("ASV","Phylum")) 
+meanSum
+
+meanSum$ESP_counts <- meanSum$ESP_counts + 1
+meanSum$Manual_counts <- meanSum$Manual_counts +1
+meanSum
+
+p <- ggplot (meanSum,aes(x = ESP_counts,y = Manual_counts, fill = Phylum)) + 
+  geom_point (pch = 21) +
+  ylim(1,100000) +
+  xlim(1,100000) +
+  scale_fill_manual(values = custom) +
+  labs(x="log (Number of sequences in ASV\nfrom ESP Sample + 1)",
+       y="log (Number of sequences in ASV\nfrom Manual Sample + 1)") +
+  scale_x_log10() +
+  scale_y_log10() +
+  theme (axis.text.x = element_text(size = 8, angle = 90, vjust = 0.5, hjust=1)) +
+  theme (axis.text.y = element_text(size = 8,vjust = 0.5, hjust=1)) +
+  theme(aspect.ratio=1) +
+  theme(legend.key=element_blank()) +
+  theme_bw ()
+  
+p <- p + geom_abline(intercept = 0, slope = 1, linetype = "dashed", colour = "grey")
+p
+
+ggsave(file="figs/SI_PositiveCounts_averages.pdf", plot=p, dpi=600)
+
+```

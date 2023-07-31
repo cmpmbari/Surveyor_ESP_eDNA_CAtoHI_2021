@@ -1,0 +1,32 @@
+---
+title: "Aligning Figure 6"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(cowplot)
+#https://rdrr.io/cran/cowplot/man/save_plot.html
+
+Figure6_qPCR_RelAb <- plot_grid (fig_qPCR_16S18S, phylum1percent, cnidaria,
+           align ="v",
+           labels = "", 
+           axis = "b",
+           ncol = 1)
+
+fig_qPCR_16S18S
+
+save_plot(
+  filename = "figs/Figure6_qPCR_RelAb.eps",
+  plot = Figure6_qPCR_RelAb ,
+  ncol = 1,
+  nrow = 3,
+  base_height = 3.71,
+  base_asp = 1.68)
+
+```
+
+

@@ -1,0 +1,78 @@
+---
+title: "Figure 3- Sample Map"
+output: html_notebook
+---
+
+
+```{r}
+lodit <- TRUE
+if(lodit) {
+#######tutorial for OceanMaps: MODIS Data https://ro-allen.github.io/oceanmap.html
+devtools::install_github("MikkoVihtakari/ggOceanMapsData") # required by ggOceanMaps
+devtools::install_github("MikkoVihtakari/ggOceanMaps")
+
+install.packages("pracma")
+install.packages("RColorBrewer")
+install.packages("cowplot")
+
+library(sf)
+library(ggplot2)
+library(ggOceanMaps)
+library(dplyr)
+library(plyr)
+library(cowplot)
+library(RColorBrewer)
+library(pracma)
+#library(tidyverse)
+}
+```
+
+```{r}
+#Read in satellite data
+load("data/June2021-PacificSST.RData")
+
+#Create the vector of lon, lat data, then create the data frame of the vector data
+G <- meshgrid(SST$Tlon,SST$Tlat)
+sst <- data.frame(lat = as.vector(G$Y), lon = as.vector(G$X), SST = as.vector(SST$Temperature))
+cpal <- rev(brewer.pal(11,'Spectral'))
+```
+
+```{r}
+#Extract Longitude and Latitude data of samples
+#Uses metadata file loaded from intoPhyloseq.Rmd
+LongLat_transit <- subset(metadata, sample_type3=='field')
+LongLat_transit
+
+#full data set lat/log had NA treated as character after subset, reclassify data as numeric. 
+LongLat_transit$LongitudeStart <- as.numeric(as.character(LongLat_transit$LongitudeStart))
+LongLat_transit$LatitudeStart <- as.numeric(as.character(LongLat_transit$LatitudeStart))
+LongLat_transit
+
+#Get the map region
+#https://aen-r-workshop.github.io/4-ggOceanMaps/ggOceanMaps_workshop.html#15
+#https://stackoverflow.com/questions/47684540/plot-a-small-region-of-a-map-with-ocean-in-ggplot2
+map_SFtoHI <- basemap(limits = c(-160, -110, 15, 40), rotate = FALSE)
+map_SFtoHI 
+
+#This is the map
+Fig_map_samples <- map_SFtoHI +
+  #geom_raster(data=sst,aes(x=lon,y=lat,fill=SST)) +
+  geom_tile(data=sst,aes(x=lon,y=lat,fill=SST)) +
+  scale_fill_gradientn(colours = cpal) +
+  geom_point(data=LongLat_transit,aes(x=LongitudeStart, y=LatitudeStart),
+             shape = 21, size = 2, 
+             stroke = 0.1, color="black") +
+  labs(x="Longitude",y="Latitude",color="legend") 
+
+Fig_map_samples <- reorder_layers(Fig_map_samples)
+Fig_map_samples
+
+save_plot(
+  filename = "figs/Figure_Map.pdf",
+  plot = Fig_map_samples,
+  ncol = 1,
+  nrow = 1,
+  base_height = 3.71,
+  base_asp = 1.618)
+
+```

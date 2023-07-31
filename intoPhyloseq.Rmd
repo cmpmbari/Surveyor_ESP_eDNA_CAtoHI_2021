@@ -1,0 +1,85 @@
+---
+title: "Getting Data into PhyloSeq Object "
+output: html_notebook
+---
+```{r}
+#if(!requireNamespace("BiocManager")){
+#  install.packages("BiocManager")
+#}
+#BiocManager::install("phyloseq")
+#install.packages("stringr") 
+#install.packages("remotes")
+#remotes::install_github("jbisanz/qiime2R")              
+```
+
+
+```{r}
+library(phyloseq) 
+#packageVersion("phyloseq")
+#citation("phyloseq")
+library(vegan) 
+library(tidyverse) 
+library(devtools)
+library(qiime2R) 
+#install.packages("stringr") 
+library("stringr")                
+```
+
+```{r}
+# Importing ASVs abundance file
+ASVs <- read_qza("data/2022mar15/table.qza")
+ASVs$data
+
+# Importing metadata
+metadata <- read.table ("data/2022mar15/mapfile.txt", sep='\t', header=T, row.names=1, comment="")
+metadata <- metadata[-1,] # remove the second line that specifies the data type
+metadata
+
+metadata$LongitudeStart #changing from character to numeric before creating phyloseq Object
+is.factor(metadata$LongitudeStart)
+factor <- as.factor(metadata$LongitudeStart)
+is.factor(factor)
+factor
+metadata$LongitudeStart <- factor
+is.factor(metadata$LongitudeStart)
+
+# Importing tree
+tree <- read_qza("data/2022mar15/rooted-tree.qza")
+#tree$data
+
+# Importing taxonomy
+taxonomy <- read_qza("data/2022mar15/taxonomy.qza")
+#taxonomy$data
+
+tax_table <- do.call(rbind, strsplit(as.character(taxonomy$data$Taxon), ";"))
+colnames(tax_table) <- c("Kingdom","Phylum","Class","Order","Family","Genus","Species")
+rownames(tax_table) <- taxonomy$data$Feature.ID
+#tax_table
+```
+
+```{r}
+# Creating phyloseq object
+ps <- phyloseq(
+  otu_table(ASVs$data, taxa_are_rows = TRUE),
+  phy_tree(tree$data),
+  tax_table(tax_table),
+  sample_data(metadata)
+)
+
+ntaxa(ps)
+nsamples(ps)
+sample_names(ps)[1:5]  
+rank_names(ps)  
+sample_variables(ps)  
+otu_table(ps)[1:5, 1:5]  
+tax_table(ps)[1:5, 1:4]
+```
+
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
